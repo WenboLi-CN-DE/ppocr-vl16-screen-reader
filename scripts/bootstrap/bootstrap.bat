@@ -9,6 +9,7 @@ if exist ".ppocr_use_global" set "USE_CHINA_SOURCES="
 set "UV_HTTP_TIMEOUT=300"
 set "PADDLE_PDX_CACHE_HOME=%CD%\models"
 set "PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True"
+set "FLAGS_allocator_strategy=naive_best_fit"
 
 if defined USE_CHINA_SOURCES (
   set "UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple"

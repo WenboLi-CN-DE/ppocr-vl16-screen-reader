@@ -12,6 +12,7 @@ def main():
     os.environ.setdefault("PADDLE_PDX_CACHE_HOME", str(MODEL_CACHE_HOME))
     os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "modelscope")
     os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+    os.environ.setdefault("FLAGS_allocator_strategy", "naive_best_fit")
 
     from paddlex.inference.utils.official_models import official_models
 

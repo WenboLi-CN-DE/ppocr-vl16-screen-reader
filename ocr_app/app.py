@@ -44,6 +44,7 @@ os.environ.setdefault("PADDLE_PDX_CACHE_HOME", str(_base_dir / "models"))
 if (_base_dir / ".ppocr_use_tuna").exists():
     os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "modelscope")
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+os.environ.setdefault("FLAGS_allocator_strategy", "naive_best_fit")
 os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("FLAGS_minloglevel", "2")
 warnings.filterwarnings("ignore", message=r"No ccache found.*")
@@ -439,6 +440,7 @@ class OCRApp:
 
     def perform_ocr(self, left, top, right, bottom):
         temp_image_path = None
+        screenshot = None
         try:
             screenshot = ImageGrab.grab(bbox=(left, top, right, bottom))
             print(f"截图尺寸: {screenshot.size}")
@@ -471,6 +473,8 @@ class OCRApp:
             ) as temp_image:
                 temp_image_path = Path(temp_image.name)
             screenshot.save(str(temp_image_path))
+            screenshot.close()
+            screenshot = None
 
             results = self.predict_with_gpu_oom_fallback(str(temp_image_path), predict_kwargs)
             count = len(results) if hasattr(results, "__len__") else "未知"
@@ -481,6 +485,8 @@ class OCRApp:
             print(f"OCR识别完整错误: {error}")
             self.ui_queue.put(("error", error_msg))
         finally:
+            if screenshot is not None:
+                screenshot.close()
             if temp_image_path and temp_image_path.exists():
                 temp_image_path.unlink()
 
