@@ -54,6 +54,8 @@ def test_acceleration_installers_sync_base_dependencies_before_no_sync_marker():
     assert ".ppocr_use_tuna" in windows_script
     assert "PADDLE_GPU_PACKAGE" in windows_script
     assert "paddlepaddle-gpu==3.3.0" in windows_script
+    assert "uv pip uninstall paddlepaddle" in windows_script
+    assert "uv pip uninstall -y" not in windows_script
     assert "CUDA Version: 13" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu130/" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu126/" in windows_script

@@ -35,7 +35,7 @@ echo Syncing base dependencies first. This prevents missing packages such as PIL
 uv sync
 if errorlevel 1 goto :error
 
-uv pip uninstall -y paddlepaddle
+uv pip uninstall paddlepaddle
 if errorlevel 1 goto :error
 
 if defined USE_TUNA (
