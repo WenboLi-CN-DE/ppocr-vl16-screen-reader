@@ -39,6 +39,10 @@ from .text import (
 )
 
 
+_base_dir = Path(__file__).resolve().parent.parent
+os.environ.setdefault("PADDLE_PDX_CACHE_HOME", str(_base_dir / "models"))
+if (_base_dir / ".ppocr_use_tuna").exists():
+    os.environ.setdefault("PADDLE_PDX_MODEL_SOURCE", "modelscope")
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("FLAGS_minloglevel", "2")
