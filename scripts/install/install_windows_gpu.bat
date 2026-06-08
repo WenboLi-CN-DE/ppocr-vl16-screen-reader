@@ -69,7 +69,7 @@ for /L %%A in (1,1,5) do (
   echo Downloading PaddlePaddle GPU wheel attempt %%A/5...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '!PADDLE_GPU_WHEEL_URL!' -OutFile '!PADDLE_GPU_WHEEL_FILE!'"
   if not errorlevel 1 (
-    uv run python -c "import sys, zipfile; z=zipfile.ZipFile(sys.argv[1]); bad=z.testzip(); z.close(); raise SystemExit(1 if bad else 0)" "!PADDLE_GPU_WHEEL_FILE!"
+    uv run python -c "import sys, zipfile; p=sys.argv[1]; exec('try:\n z=zipfile.ZipFile(p)\n bad=z.testzip()\n z.close()\n raise SystemExit(1 if bad else 0)\nexcept Exception:\n raise SystemExit(1)')" "!PADDLE_GPU_WHEEL_FILE!"
     if not errorlevel 1 exit /b 0
   )
   echo PaddlePaddle GPU wheel download was incomplete; retrying...

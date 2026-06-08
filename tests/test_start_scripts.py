@@ -59,6 +59,8 @@ def test_windows_bootstrap_uses_delayed_expansion_for_gpu_package_variables():
     assert "PADDLE_GPU_WHEEL_FILE" in script
     assert "Invoke-WebRequest" in script
     assert "zipfile.ZipFile" in script
+    assert "except Exception" in script
+    assert "traceback" not in script.lower()
     assert "uv pip install !PADDLE_GPU_WHEEL_FILE!" in script
     assert "uv pip install !PADDLE_GPU_RUNTIME_PACKAGE! -i !PADDLE_GPU_INDEX!" in script
     assert "uv pip install !PADDLE_GPU_WHEEL!" not in script
@@ -76,6 +78,8 @@ def test_acceleration_installers_sync_base_dependencies_before_no_sync_marker():
     assert "PADDLE_GPU_WHEEL_FILE" in windows_script
     assert "Invoke-WebRequest" in windows_script
     assert "zipfile.ZipFile" in windows_script
+    assert "except Exception" in windows_script
+    assert "traceback" not in windows_script.lower()
     assert "paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl" in windows_script
     assert "uv pip uninstall paddlepaddle" in windows_script
     assert "uv pip uninstall -y" not in windows_script
