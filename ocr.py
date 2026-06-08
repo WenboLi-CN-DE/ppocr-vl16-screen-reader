@@ -10,12 +10,17 @@ import sysconfig
 import tempfile
 import threading
 import tkinter as tk
+import warnings
 from pathlib import Path
 from tkinter import messagebox
 from urllib.parse import urlparse
 
 
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+os.environ.setdefault("GLOG_minloglevel", "2")
+os.environ.setdefault("FLAGS_minloglevel", "2")
+warnings.filterwarnings("ignore", message=r"No ccache found.*")
+warnings.filterwarnings("ignore", message=r"To copy construct from a tensor.*")
 
 WINDOWS_NVIDIA_DLL_HANDLES = []
 

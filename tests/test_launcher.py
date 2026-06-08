@@ -79,3 +79,34 @@ def test_launcher_keeps_cpu_fallback_when_no_accelerator_exists(tmp_path):
 
     assert "PPOCR_ACCEL" not in env
     assert "PPOCR_DEVICE" not in env
+
+
+def test_launcher_filters_noisy_third_party_output():
+    noisy_lines = [
+        "Creating model: ('PP-DocLayoutV3', 'path', None)",
+        "信息: 用提供的模式无法找到文件。",
+        "WARNING: Logging before InitGoogleLogging() is written to STDERR",
+        "W0608 20:13:11.612800 gpu_resources.cc:116] Please NOTE: device: 0",
+        "use GQA - num_heads: 16- num_key_value_heads: 2",
+        "Loaded weights file from disk, setting weights to model.",
+        "E:\\path\\creation.py:1152: UserWarning: To copy construct from a tensor",
+        "Bucketed engine_config has no entry for resolved engine 'paddle_dynamic'; using an empty config for that engine.",
+    ]
+
+    assert [launcher.should_show_ocr_output(line) for line in noisy_lines] == [False] * len(noisy_lines)
+
+
+def test_launcher_keeps_app_status_and_errors_visible():
+    visible_lines = [
+        "PaddleOCR-VL 1.6 初始化成功",
+        "当前工作目录: E:\\personal_project\\ppocr_v1.6",
+        "选择区域: (1, 2, 3, 4)",
+        "OCR推理完成, 结果条目数: 1",
+        "OCR识别文本行数: 3",
+        "GPU 显存不足,自动切换 CPU 重试本次识别",
+        "OCR识别失败: CUDA error",
+        "Traceback (most recent call last):",
+        "Could not locate cublasLt64_13.dll",
+    ]
+
+    assert [launcher.should_show_ocr_output(line) for line in visible_lines] == [True] * len(visible_lines)
