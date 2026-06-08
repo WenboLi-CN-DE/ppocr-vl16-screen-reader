@@ -173,7 +173,7 @@ def main():
         port_open=port_open,
         start_server=start_background_server,
     )
-    run_ocr_process([sys.executable, "ocr.py"], os.environ)
+    run_ocr_process([sys.executable, "-m", "ocr_app.app"], os.environ)
 
 
 if __name__ == "__main__":

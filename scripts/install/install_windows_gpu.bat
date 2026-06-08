@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0\..\.."
 set "UV_HTTP_TIMEOUT=300"
 
 set "USE_TUNA="

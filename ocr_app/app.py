@@ -1,19 +1,42 @@
-import ctypes
-import html
 import os
-import re
-import socket
 import queue
-import site
 import sys
-import sysconfig
 import tempfile
 import threading
 import tkinter as tk
 import warnings
 from pathlib import Path
 from tkinter import messagebox
-from urllib.parse import urlparse
+
+from .platform import (
+    DPIHandler,
+    configure_windows_nvidia_dll_paths,
+    is_url_port_open,
+)
+from .predictor import OcrPredictor
+from .profiles import (
+    FAST_OCR_PREDICT_KWARGS,
+    LOW_MEMORY_FAST_OCR_PREDICT_KWARGS,
+    LOW_MEMORY_PRESERVE_LAYOUT_PREDICT_KWARGS,
+    MAX_FAST_IMAGE_EDGE,
+    MAX_LOW_MEMORY_IMAGE_EDGE,
+    PRESERVE_LAYOUT_PREDICT_KWARGS,
+    resize_for_ocr,
+    select_max_edge,
+    select_predict_kwargs,
+)
+from .runtime import (
+    acceleration_kwargs as runtime_acceleration_kwargs,
+    is_cuda_out_of_memory_error,
+    local_model_kwargs,
+    require_runtime_dependencies as require_runtime_dependencies_for_error,
+    use_gpu_low_memory_mode,
+)
+from .text import (
+    extract_layout_block_lines,
+    extract_lines_from_layout_blocks,
+    extract_text_lines,
+)
 
 
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
@@ -21,83 +44,6 @@ os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("FLAGS_minloglevel", "2")
 warnings.filterwarnings("ignore", message=r"No ccache found.*")
 warnings.filterwarnings("ignore", message=r"To copy construct from a tensor.*")
-
-WINDOWS_NVIDIA_DLL_HANDLES = []
-
-
-def windows_site_package_roots():
-    roots = {
-        Path(sys.prefix) / "Lib" / "site-packages",
-        Path(sysconfig.get_paths().get("purelib", "")),
-        Path(sysconfig.get_paths().get("platlib", "")),
-    }
-    try:
-        roots.update(Path(path) for path in site.getsitepackages())
-    except AttributeError:
-        pass
-    try:
-        roots.add(Path(site.getusersitepackages()))
-    except AttributeError:
-        pass
-    return [root for root in roots if str(root) and root.exists()]
-
-
-def configure_windows_nvidia_dll_paths(
-    *,
-    site_package_roots=None,
-    add_dll_directory=None,
-    load_library=None,
-    environ=None,
-    os_name=None,
-):
-    """Expose CUDA DLLs installed by NVIDIA Python wheels on Windows."""
-    if os_name is None:
-        os_name = os.name
-    if os_name != "nt":
-        return []
-    if site_package_roots is None:
-        site_package_roots = windows_site_package_roots()
-    if add_dll_directory is None:
-        add_dll_directory = getattr(os, "add_dll_directory", None)
-    if load_library is None:
-        load_library = ctypes.WinDLL
-    if environ is None:
-        environ = os.environ
-
-    dll_dirs = []
-    preload_dlls = []
-    for root in site_package_roots:
-        nvidia_root = Path(root) / "nvidia"
-        if not nvidia_root.exists():
-            continue
-        for dll_path in sorted(nvidia_root.rglob("*.dll")):
-            dll_dir = str(dll_path.parent)
-            if dll_dir not in dll_dirs:
-                dll_dirs.append(dll_dir)
-            if dll_path.name.lower() == "cublaslt64_13.dll":
-                preload_dlls.append(str(dll_path))
-
-    path_separator = ";" if os_name == "nt" else os.pathsep
-    existing_path = environ.get("PATH", "")
-    existing_parts = {part.lower() for part in existing_path.split(path_separator) if part}
-    new_parts = [path for path in dll_dirs if path.lower() not in existing_parts]
-    if new_parts:
-        environ["PATH"] = path_separator.join(new_parts + ([existing_path] if existing_path else []))
-
-    if add_dll_directory is not None:
-        for path in new_parts:
-            handle = add_dll_directory(path)
-            if handle is not None:
-                WINDOWS_NVIDIA_DLL_HANDLES.append(handle)
-
-    for dll_path in preload_dlls:
-        try:
-            WINDOWS_NVIDIA_DLL_HANDLES.append(load_library(dll_path))
-        except OSError:
-            pass
-
-    return dll_dirs
-
 
 configure_windows_nvidia_dll_paths()
 
@@ -118,32 +64,6 @@ except ImportError as error:
     RUNTIME_IMPORT_ERROR = RUNTIME_IMPORT_ERROR or error
 
 
-FAST_OCR_PREDICT_KWARGS = {
-    "use_layout_detection": False,
-    "prompt_label": "ocr",
-    "max_new_tokens": 1536,
-    "max_pixels": 1280 * 28 * 28,
-}
-PRESERVE_LAYOUT_PREDICT_KWARGS = {
-    "use_layout_detection": True,
-    "merge_layout_blocks": True,
-    "format_block_content": False,
-    "max_new_tokens": 1536,
-    "max_pixels": 1280 * 28 * 28,
-}
-MAX_FAST_IMAGE_EDGE = 1536
-LOW_MEMORY_FAST_OCR_PREDICT_KWARGS = {
-    **FAST_OCR_PREDICT_KWARGS,
-    "max_new_tokens": 768,
-    "max_pixels": 768 * 28 * 28,
-}
-LOW_MEMORY_PRESERVE_LAYOUT_PREDICT_KWARGS = {
-    **PRESERVE_LAYOUT_PREDICT_KWARGS,
-    "max_new_tokens": 768,
-    "max_pixels": 768 * 28 * 28,
-}
-MAX_LOW_MEMORY_IMAGE_EDGE = 1024
-
 if Image is not None:
     RESAMPLE_LANCZOS = getattr(getattr(Image, "Resampling", None), "LANCZOS", None)
     if RESAMPLE_LANCZOS is None:
@@ -153,168 +73,15 @@ else:
 
 
 def require_runtime_dependencies():
-    """Ensure OCR runtime dependencies are installed."""
-    if RUNTIME_IMPORT_ERROR:
-        raise RuntimeError(f"运行依赖缺失: {RUNTIME_IMPORT_ERROR}. 请先执行: uv sync")
-
-
-def html_to_plain_text(text):
-    if not isinstance(text, str):
-        return text
-    if "<" not in text or ">" not in text:
-        return html.unescape(text)
-    cleaned = text
-    cleaned = re.sub(r"(?i)</tr\s*>", "\n\n", cleaned)
-    cleaned = re.sub(r"(?i)<br\s*/?>", "\n", cleaned)
-    cleaned = re.sub(r"(?i)</p\s*>", "\n\n", cleaned)
-    cleaned = re.sub(r"(?i)</div\s*>", "\n\n", cleaned)
-    cleaned = re.sub(r"(?i)</td\s*>\s*<td[^>]*>", " ", cleaned)
-    cleaned = re.sub(r"(?i)<[^>]+>", "", cleaned)
-    cleaned = html.unescape(cleaned)
-    return cleaned.strip()
-
-
-def normalize_text_lines(text):
-    if not isinstance(text, str):
-        return []
-    text = html_to_plain_text(text)
-    normalized_lines = []
-    paragraph_lines = []
-
-    def flush_paragraph():
-        if not paragraph_lines:
-            return
-        normalized_lines.append(" ".join(paragraph_lines))
-        paragraph_lines.clear()
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if line:
-            paragraph_lines.append(line)
-        else:
-            flush_paragraph()
-            if normalized_lines and normalized_lines[-1] != "":
-                normalized_lines.append("")
-
-    flush_paragraph()
-
-    while normalized_lines and normalized_lines[-1] == "":
-        normalized_lines.pop()
-    return normalized_lines
-
-
-def resize_for_fast_ocr(image, max_edge=MAX_FAST_IMAGE_EDGE):
-    width, height = image.size
-    longest_edge = max(width, height)
-    if longest_edge <= max_edge:
-        return image
-    scale = max_edge / longest_edge
-    new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
-    return image.resize(new_size, RESAMPLE_LANCZOS)
-
-
-def use_gpu_low_memory_mode():
-    return (
-        os.environ.get("PPOCR_DEVICE", "").strip().lower() == "gpu"
-        and os.environ.get("PPOCR_GPU_MEMORY_MODE", "").strip().lower() in {"1", "true", "low"}
-    )
-
-
-def is_cuda_out_of_memory_error(error):
-    text = str(error).lower()
-    return (
-        "out of memory" in text
-        or "cudaerrormemoryallocation" in text
-        or "cuda error(2)" in text
-    )
-
-
-def local_model_kwargs(base_dir):
-    model_root = Path(base_dir) / "models" / "official_models"
-    layout_dir = model_root / "PP-DocLayoutV3"
-    vl_dir = model_root / "PaddleOCR-VL-1.6"
-    legacy_vl_dir = model_root / "PaddleOCR-VL-1.6-0.9B"
-    kwargs = {}
-    if layout_dir.exists():
-        kwargs["layout_detection_model_dir"] = str(layout_dir)
-    if vl_dir.exists():
-        kwargs["vl_rec_model_dir"] = str(vl_dir)
-    elif legacy_vl_dir.exists():
-        kwargs["vl_rec_model_dir"] = str(legacy_vl_dir)
-    return kwargs
-
-
-def is_url_port_open(url, timeout=0.25):
-    parsed = urlparse(url)
-    host = parsed.hostname
-    port = parsed.port
-    if not host or not port:
-        return False
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
-def vl_model_api_name(base_dir):
-    model_dir = Path(base_dir) / "models" / "official_models" / "PaddleOCR-VL-1.6"
-    if model_dir.exists():
-        return str(model_dir)
-    return "PaddlePaddle/PaddleOCR-VL-1.6"
+    require_runtime_dependencies_for_error(RUNTIME_IMPORT_ERROR)
 
 
 def acceleration_kwargs(base_dir):
-    kwargs = {}
-
-    device = os.environ.get("PPOCR_DEVICE")
-    if device:
-        kwargs["device"] = device
-
-    engine = os.environ.get("PPOCR_ENGINE")
-    if engine:
-        kwargs["engine"] = engine
-
-    precision = os.environ.get("PPOCR_PRECISION")
-    if precision:
-        kwargs["precision"] = precision
-
-    accel = os.environ.get("PPOCR_ACCEL", "auto").strip().lower()
-    if accel in {"mlx", "mlx-vlm", "mlx-vlm-server"}:
-        server_url = os.environ.get("PPOCR_MLX_SERVER_URL", "http://127.0.0.1:8111/")
-        if is_url_port_open(server_url):
-            kwargs.update(
-                {
-                    "vl_rec_backend": "mlx-vlm-server",
-                    "vl_rec_server_url": server_url,
-                    "vl_rec_api_model_name": os.environ.get(
-                        "PPOCR_MLX_MODEL_NAME", vl_model_api_name(base_dir)
-                    ),
-                }
-            )
-        else:
-            print(f"MLX-VLM 服务不可用,回退本地推理: {server_url}")
-
-    return kwargs
+    return runtime_acceleration_kwargs(base_dir, port_open=is_url_port_open)
 
 
-class DPIHandler:
-    """DPI handling for Windows screen coordinates."""
-
-    def __init__(self):
-        self.setup_dpi_awareness()
-
-    def setup_dpi_awareness(self):
-        if sys.platform != "win32":
-            return
-
-        try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        except (AttributeError, OSError):
-            try:
-                ctypes.windll.user32.SetProcessDPIAware()
-            except (AttributeError, OSError):
-                pass
+def resize_for_fast_ocr(image, max_edge=MAX_FAST_IMAGE_EDGE):
+    return resize_for_ocr(image, max_edge, RESAMPLE_LANCZOS)
 
 
 class ScreenSelector:
@@ -488,6 +255,7 @@ class OCRApp:
             kwargs.update(accel_kwargs)
             self.ocr_kwargs = kwargs
             self.ocr = self.create_ocr_engine(kwargs)
+            self.ocr_predictor = self.create_ocr_predictor()
             print("PaddleOCR-VL 1.6 初始化成功")
             if hasattr(self, "base_dir"):
                 print(f"当前工作目录: {self.base_dir}")
@@ -495,7 +263,7 @@ class OCRApp:
             messagebox.showerror("错误", f"OCR初始化失败: {str(error)}")
             self.ocr = None
 
-    def create_ocr_engine(self, kwargs):
+    def create_ocr_engine(self, kwargs, persist=True):
         try:
             return PaddleOCRVL(**kwargs)
         except Exception:
@@ -505,8 +273,29 @@ class OCRApp:
             fallback_kwargs["device"] = "cpu"
             print("GPU 初始化失败,自动回退 CPU")
             engine = PaddleOCRVL(**fallback_kwargs)
-            self.ocr_kwargs = fallback_kwargs
+            if persist:
+                self.ocr_kwargs = fallback_kwargs
             return engine
+
+    def create_ocr_predictor(self):
+        return OcrPredictor(
+            get_engine=lambda: self.ocr,
+            get_engine_kwargs=lambda: self.ocr_kwargs,
+            create_engine=self.create_transient_ocr_engine,
+            set_engine=self.set_ocr_engine,
+        )
+
+    def create_transient_ocr_engine(self, kwargs):
+        try:
+            return self.create_ocr_engine(kwargs, persist=False)
+        except TypeError as error:
+            if "persist" not in str(error):
+                raise
+            return self.create_ocr_engine(kwargs)
+
+    def set_ocr_engine(self, engine, kwargs):
+        self.ocr = engine
+        self.ocr_kwargs = kwargs
 
     def create_main_window(self):
         self.root = tk.Tk()
@@ -570,7 +359,7 @@ class OCRApp:
         )
         self.fast_mode_check.grid(row=0, column=0, sticky="w", padx=(0, 16))
 
-        self.preserve_layout_var = tk.BooleanVar(value=True)
+        self.preserve_layout_var = tk.BooleanVar(value=False)
         self.preserve_layout_check = tk.Checkbutton(
             option_frame,
             text="保留原文分段",
@@ -649,23 +438,25 @@ class OCRApp:
         try:
             screenshot = ImageGrab.grab(bbox=(left, top, right, bottom))
             print(f"截图尺寸: {screenshot.size}")
-            predict_kwargs = {}
             low_memory_mode = use_gpu_low_memory_mode()
-            max_edge = MAX_LOW_MEMORY_IMAGE_EDGE if low_memory_mode else MAX_FAST_IMAGE_EDGE
-            if self.use_preserve_layout():
+            fast_mode = self.use_fast_mode()
+            preserve_layout = self.use_preserve_layout()
+            max_edge = select_max_edge(
+                fast_mode=fast_mode,
+                preserve_layout=preserve_layout,
+                low_memory_mode=low_memory_mode,
+            )
+            if max_edge:
                 screenshot = resize_for_fast_ocr(screenshot, max_edge=max_edge)
+            predict_kwargs = select_predict_kwargs(
+                preserve_layout=preserve_layout,
+                fast_mode=fast_mode,
+                low_memory_mode=low_memory_mode,
+            )
+            if preserve_layout:
                 print(f"保留原文分段截图尺寸: {screenshot.size}")
-                if low_memory_mode:
-                    predict_kwargs = LOW_MEMORY_PRESERVE_LAYOUT_PREDICT_KWARGS.copy()
-                else:
-                    predict_kwargs = PRESERVE_LAYOUT_PREDICT_KWARGS.copy()
-            elif self.use_fast_mode():
-                screenshot = resize_for_fast_ocr(screenshot, max_edge=max_edge)
+            elif fast_mode:
                 print(f"快速模式截图尺寸: {screenshot.size}")
-                if low_memory_mode:
-                    predict_kwargs = LOW_MEMORY_FAST_OCR_PREDICT_KWARGS.copy()
-                else:
-                    predict_kwargs = FAST_OCR_PREDICT_KWARGS.copy()
 
             self.temp_dir.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(
@@ -690,18 +481,11 @@ class OCRApp:
                 temp_image_path.unlink()
 
     def predict_with_gpu_oom_fallback(self, image_path, predict_kwargs):
-        try:
-            return self.ocr.predict(image_path, **predict_kwargs)
-        except Exception as error:
-            if not self.can_retry_cpu_after_gpu_oom(error):
-                raise
-            print("GPU 显存不足,自动切换 CPU 重试本次识别")
-            cpu_kwargs = self.ocr_kwargs.copy()
-            cpu_kwargs["device"] = "cpu"
-            self.ocr = self.create_ocr_engine(cpu_kwargs)
-            self.ocr_kwargs = cpu_kwargs
-            os.environ["PPOCR_DEVICE"] = "cpu"
-            return self.ocr.predict(image_path, **predict_kwargs)
+        predictor = getattr(self, "ocr_predictor", None)
+        if predictor is None:
+            predictor = self.create_ocr_predictor()
+            self.ocr_predictor = predictor
+        return predictor.predict(image_path, predict_kwargs)
 
     def can_retry_cpu_after_gpu_oom(self, error):
         kwargs = getattr(self, "ocr_kwargs", {})
@@ -722,88 +506,13 @@ class OCRApp:
             return ("error", error_msg)
 
     def extract_layout_block_lines(self, value):
-        if value is None:
-            return []
-
-        if isinstance(value, (list, tuple)):
-            lines = []
-            for item in value:
-                item_lines = self.extract_layout_block_lines(item)
-                if item_lines:
-                    if lines and lines[-1] != "":
-                        lines.append("")
-                    lines.extend(item_lines)
-            return lines
-
-        if isinstance(value, dict):
-            blocks = value.get("parsing_res_list")
-            if isinstance(blocks, list):
-                return self.extract_lines_from_layout_blocks(blocks)
-            return []
-
-        blocks = getattr(value, "parsing_res_list", None)
-        if isinstance(blocks, list):
-            return self.extract_lines_from_layout_blocks(blocks)
-
-        return []
+        return extract_layout_block_lines(value)
 
     def extract_lines_from_layout_blocks(self, blocks):
-        lines = []
-        for block in blocks:
-            content = None
-            if isinstance(block, dict):
-                content = block.get("block_content") or block.get("content")
-            else:
-                content = getattr(block, "content", None)
-            block_lines = normalize_text_lines(content)
-            if not block_lines:
-                continue
-            if lines and lines[-1] != "":
-                lines.append("")
-            lines.extend(block_lines)
-
-        while lines and lines[-1] == "":
-            lines.pop()
-        return lines
+        return extract_lines_from_layout_blocks(blocks)
 
     def extract_text_lines(self, value):
-        lines = []
-
-        if value is None:
-            return lines
-
-        if isinstance(value, str):
-            return normalize_text_lines(value)
-
-        if isinstance(value, (list, tuple)):
-            for item in value:
-                lines.extend(self.extract_text_lines(item))
-            return lines
-
-        if isinstance(value, dict):
-            for key in (
-                "markdown",
-                "text",
-                "content",
-                "rec_text",
-                "rec_texts",
-                "parsing_res_list",
-                "layout_parsing_result",
-            ):
-                if key in value:
-                    extracted = self.extract_text_lines(value[key])
-                    if extracted:
-                        return extracted
-            return []
-
-        for attr in ("markdown", "text", "content", "rec_text", "rec_texts", "json", "res"):
-            if hasattr(value, attr):
-                attr_value = getattr(value, attr)
-                if callable(attr_value):
-                    continue
-                lines.extend(self.extract_text_lines(attr_value))
-
-        return lines
+        return extract_text_lines(value)
 
     def process_ui_queue(self):
         while True:

@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 export UV_HTTP_TIMEOUT="300"
 
 if [ "${1:-}" = "tuna" ] || [ "${1:-}" = "--tuna" ] || [ -f ".ppocr_use_tuna" ]; then

@@ -3,7 +3,9 @@ import sys
 
 import pytest
 
-import ocr
+import ocr_app.app as ocr
+from ocr_app import platform as ocr_platform
+from ocr_app import profiles as ocr_profiles
 
 
 class FakeWindow:
@@ -324,6 +326,8 @@ def test_main_window_uses_two_row_toolbar_and_visible_status(monkeypatch):
     assert root.geometry_calls == ["760x460"]
     assert root.min_size_calls == [(640, 360)]
     assert len(checkbuttons) == 4
+    assert checkbuttons[0].kwargs["variable"].get() is True
+    assert checkbuttons[1].kwargs["variable"].get() is False
     assert all(widget.grid_calls for widget in checkbuttons)
     main_frame = frames[0]
     assert main_frame.rowconfigure_calls == [(1, {"weight": 1})]
@@ -593,6 +597,29 @@ def test_perform_ocr_uses_layout_detection_when_preserving_original_paragraphs(t
     assert app.ui_queue.get_nowait() == ("text", "第一段")
 
 
+def test_perform_ocr_defaults_to_fast_mode_without_layout_detection(tmp_path, monkeypatch):
+    calls = []
+
+    class SuccessfulOCR:
+        def predict(self, path, **kwargs):
+            calls.append(kwargs)
+            return [{"text": "ok"}]
+
+    app = ocr.OCRApp.__new__(ocr.OCRApp)
+    app.temp_dir = tmp_path
+    app.ocr = SuccessfulOCR()
+    app.fast_mode_var = FakeVar(True)
+    app.preserve_layout_var = FakeVar(False)
+    app.root = FakeRoot()
+    app.ui_queue = ocr.queue.Queue()
+
+    monkeypatch.setattr(ocr.ImageGrab, "grab", lambda bbox: FakeScreenshot())
+
+    app.perform_ocr(0, 0, 20, 20)
+
+    assert calls == [ocr.FAST_OCR_PREDICT_KWARGS]
+
+
 def test_perform_ocr_uses_low_memory_predict_kwargs_on_gpu(tmp_path, monkeypatch):
     calls = []
 
@@ -648,7 +675,45 @@ def test_perform_ocr_retries_cpu_once_when_gpu_predict_oom(tmp_path, monkeypatch
     app.perform_ocr(0, 0, 20, 20)
 
     assert created == [{"pipeline_version": "v1.6", "device": "cpu"}]
+    assert isinstance(app.ocr, FailingGpuOCR)
+    assert app.ocr_kwargs == {"pipeline_version": "v1.6", "device": "gpu"}
     assert app.ui_queue.get_nowait() == ("text", "cpu ok")
+
+
+def test_perform_ocr_retries_conservative_gpu_before_cpu(tmp_path, monkeypatch):
+    created = []
+
+    class OomThenSuccessfulGpuOCR:
+        def __init__(self):
+            self.calls = []
+
+        def predict(self, path, **kwargs):
+            self.calls.append(kwargs)
+            if len(self.calls) == 1:
+                raise RuntimeError("CUDA error(2), out of memory")
+            return [{"text": "gpu ok"}]
+
+    app = ocr.OCRApp.__new__(ocr.OCRApp)
+    app.temp_dir = tmp_path
+    app.ocr = OomThenSuccessfulGpuOCR()
+    app.ocr_kwargs = {"pipeline_version": "v1.6", "device": "gpu"}
+    app.use_fast_mode = lambda: True
+    app.use_preserve_layout = lambda: False
+    app.root = FakeRoot()
+    app.ui_queue = ocr.queue.Queue()
+    app.create_ocr_engine = lambda kwargs: created.append(kwargs)
+
+    monkeypatch.setattr(ocr.ImageGrab, "grab", lambda bbox: FakeScreenshot())
+
+    app.perform_ocr(0, 0, 20, 20)
+
+    assert created == []
+    assert app.ocr.calls == [
+        ocr.FAST_OCR_PREDICT_KWARGS,
+        ocr_profiles.EMERGENCY_FAST_OCR_PREDICT_KWARGS,
+    ]
+    assert app.ocr_kwargs == {"pipeline_version": "v1.6", "device": "gpu"}
+    assert app.ui_queue.get_nowait() == ("text", "gpu ok")
 
 
 def test_perform_ocr_does_not_overwrite_existing_temporary_screenshot(tmp_path, monkeypatch):
@@ -799,7 +864,7 @@ def test_dpi_handler_skips_windows_api_on_non_windows(monkeypatch):
 
     windll = UnexpectedWindll()
     monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(ocr.ctypes, "windll", windll, raising=False)
+    monkeypatch.setattr(ocr_platform.ctypes, "windll", windll, raising=False)
 
     ocr.DPIHandler()
 
