@@ -21,14 +21,16 @@ echo If nvidia-smi reports CUDA Version 13.x, the CUDA 13.0 Paddle package will 
 pause
 
 set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+set "PADDLE_GPU_WHEEL_BASE=https://paddle-whl.bj.bcebos.com/stable/cu126/"
 set "PADDLE_GPU_WHEEL_NAME=paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl"
-set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
+set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_WHEEL_BASE!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
 set "PADDLE_GPU_WHEEL_FILE=%CD%\temp\!PADDLE_GPU_WHEEL_NAME!"
 set "PADDLE_GPU_RUNTIME_PACKAGE="
 nvidia-smi 2>nul | findstr /C:"CUDA Version: 13" >nul
 if not errorlevel 1 (
   set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu130/"
-  set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
+  set "PADDLE_GPU_WHEEL_BASE=https://paddle-whl.bj.bcebos.com/stable/cu130/"
+  set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_WHEEL_BASE!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
   set "PADDLE_GPU_RUNTIME_PACKAGE=nvidia-cublas"
 )
 

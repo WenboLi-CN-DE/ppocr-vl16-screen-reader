@@ -45,6 +45,8 @@ def test_bootstrap_scripts_default_to_china_sources_and_download_models():
     assert "https://www.paddlepaddle.org.cn/packages/stable/cpu/" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu130/" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu126/" in windows_script
+    assert "https://paddle-whl.bj.bcebos.com/stable/cu130/" in windows_script
+    assert "https://paddle-whl.bj.bcebos.com/stable/cu126/" in windows_script
     assert "paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl" in windows_script
     assert "nvidia-cublas" in windows_script
     assert "nvidia-smi" in windows_script
@@ -86,6 +88,8 @@ def test_acceleration_installers_sync_base_dependencies_before_no_sync_marker():
     assert "CUDA Version: 13" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu130/" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu126/" in windows_script
+    assert "https://paddle-whl.bj.bcebos.com/stable/cu130/" in windows_script
+    assert "https://paddle-whl.bj.bcebos.com/stable/cu126/" in windows_script
     assert "nvidia-cublas" in windows_script
 
     assert "uv sync" in mac_script

@@ -49,14 +49,16 @@ nvidia-smi >nul 2>nul
 if not errorlevel 1 (
   echo NVIDIA GPU detected; ensuring PaddlePaddle GPU package is installed...
   set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+  set "PADDLE_GPU_WHEEL_BASE=https://paddle-whl.bj.bcebos.com/stable/cu126/"
   set "PADDLE_GPU_WHEEL_NAME=paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl"
-  set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
+  set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_WHEEL_BASE!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
   set "PADDLE_GPU_WHEEL_FILE=%CD%\temp\!PADDLE_GPU_WHEEL_NAME!"
   set "PADDLE_GPU_RUNTIME_PACKAGE="
   nvidia-smi 2>nul | findstr /C:"CUDA Version: 13" >nul
   if not errorlevel 1 (
     set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu130/"
-    set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
+    set "PADDLE_GPU_WHEEL_BASE=https://paddle-whl.bj.bcebos.com/stable/cu130/"
+    set "PADDLE_GPU_WHEEL_URL=!PADDLE_GPU_WHEEL_BASE!paddlepaddle-gpu/!PADDLE_GPU_WHEEL_NAME!"
     set "PADDLE_GPU_RUNTIME_PACKAGE=nvidia-cublas"
   )
 
