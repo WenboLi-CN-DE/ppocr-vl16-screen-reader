@@ -11,7 +11,7 @@ __pycache__/
 .ruff_cache/
 
 # Downloaded model weights and generated runtime data
-models/
+/models/
 temp/
 wheelhouse/
 requirements.lock.txt
