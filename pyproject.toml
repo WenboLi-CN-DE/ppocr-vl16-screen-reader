@@ -1,0 +1,20 @@
+[project]
+name = "ppocr-vl16-screen-reader"
+version = "0.1.0"
+description = "Cross-platform desktop screenshot OCR tool powered by PaddleOCR-VL 1.6."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "paddleocr[doc-parser]>=3.6.0,<4",
+    "paddlepaddle>=3.2.1,<4",
+    "pillow>=10,<13",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

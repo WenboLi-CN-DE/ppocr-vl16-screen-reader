@@ -1,0 +1,33 @@
+# Local Python environments
+.venv/
+venv/
+env/
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Downloaded model weights and generated runtime data
+models/
+temp/
+wheelhouse/
+requirements.lock.txt
+
+# Local acceleration/source markers
+.ppocr_no_sync
+.ppocr_use_tuna
+
+# Local tool caches
+.codegraph/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Logs
+*.log
