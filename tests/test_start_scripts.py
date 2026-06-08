@@ -51,6 +51,15 @@ def test_bootstrap_scripts_default_to_china_sources_and_download_models():
     assert "mlx-vlm>=0.3.11" in mac_script
 
 
+def test_windows_bootstrap_uses_delayed_expansion_for_gpu_package_variables():
+    script = (ROOT / "scripts" / "bootstrap" / "bootstrap.bat").read_text(encoding="utf-8")
+
+    assert "setlocal EnableDelayedExpansion" in script
+    assert "uv pip install !PADDLE_GPU_PACKAGE! -i !PADDLE_GPU_INDEX!" in script
+    assert "uv pip install !PADDLE_GPU_RUNTIME_PACKAGE! -i !PADDLE_GPU_INDEX!" in script
+    assert "uv pip install %PADDLE_GPU_PACKAGE% -i %PADDLE_GPU_INDEX%" not in script
+
+
 def test_acceleration_installers_sync_base_dependencies_before_no_sync_marker():
     windows_script = (ROOT / "scripts" / "install" / "install_windows_gpu.bat").read_text(encoding="utf-8")
     mac_script = (ROOT / "scripts" / "install" / "install_macos_accel.command").read_text(encoding="utf-8")

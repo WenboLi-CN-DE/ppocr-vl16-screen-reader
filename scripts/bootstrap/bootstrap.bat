@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0\..\.."
 
 set "USE_CHINA_SOURCES=1"
@@ -60,10 +60,10 @@ if not errorlevel 1 (
   uv run python -c "import paddle, sys; sys.exit(0 if paddle.is_compiled_with_cuda() else 1)" >nul 2>nul
   if errorlevel 1 (
     uv pip uninstall paddlepaddle
-    uv pip install %PADDLE_GPU_PACKAGE% -i %PADDLE_GPU_INDEX%
+    uv pip install !PADDLE_GPU_PACKAGE! -i !PADDLE_GPU_INDEX!
     if errorlevel 1 goto :error
     if defined PADDLE_GPU_RUNTIME_PACKAGE (
-      uv pip install %PADDLE_GPU_RUNTIME_PACKAGE% -i %PADDLE_GPU_INDEX%
+      uv pip install !PADDLE_GPU_RUNTIME_PACKAGE! -i !PADDLE_GPU_INDEX!
       if errorlevel 1 goto :error
     )
     echo gpu > .ppocr_no_sync
