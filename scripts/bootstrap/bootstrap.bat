@@ -48,19 +48,20 @@ if exist ".ppocr_no_sync" (
 nvidia-smi >nul 2>nul
 if not errorlevel 1 (
   echo NVIDIA GPU detected; ensuring PaddlePaddle GPU package is installed...
-  set "PADDLE_GPU_PACKAGE=paddlepaddle-gpu==3.3.0"
   set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+  set "PADDLE_GPU_WHEEL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl"
   set "PADDLE_GPU_RUNTIME_PACKAGE="
   nvidia-smi 2>nul | findstr /C:"CUDA Version: 13" >nul
   if not errorlevel 1 (
     set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu130/"
+    set "PADDLE_GPU_WHEEL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl"
     set "PADDLE_GPU_RUNTIME_PACKAGE=nvidia-cublas"
   )
 
   uv run python -c "import paddle, sys; sys.exit(0 if paddle.is_compiled_with_cuda() else 1)" >nul 2>nul
   if errorlevel 1 (
     uv pip uninstall paddlepaddle
-    uv pip install !PADDLE_GPU_PACKAGE! -i !PADDLE_GPU_INDEX!
+    uv pip install !PADDLE_GPU_WHEEL!
     if errorlevel 1 goto :error
     if defined PADDLE_GPU_RUNTIME_PACKAGE (
       uv pip install !PADDLE_GPU_RUNTIME_PACKAGE! -i !PADDLE_GPU_INDEX!

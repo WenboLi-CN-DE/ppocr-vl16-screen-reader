@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0\..\.."
 set "UV_HTTP_TIMEOUT=300"
 
@@ -20,16 +20,17 @@ echo This installs the PaddlePaddle GPU package for NVIDIA Windows machines.
 echo If nvidia-smi reports CUDA Version 13.x, the CUDA 13.0 Paddle package will be used.
 pause
 
-set "PADDLE_GPU_PACKAGE=paddlepaddle-gpu==3.3.0"
 set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+set "PADDLE_GPU_WHEEL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl"
 set "PADDLE_GPU_RUNTIME_PACKAGE="
 nvidia-smi 2>nul | findstr /C:"CUDA Version: 13" >nul
 if not errorlevel 1 (
   set "PADDLE_GPU_INDEX=https://www.paddlepaddle.org.cn/packages/stable/cu130/"
+  set "PADDLE_GPU_WHEEL=!PADDLE_GPU_INDEX!paddlepaddle-gpu/paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl"
   set "PADDLE_GPU_RUNTIME_PACKAGE=nvidia-cublas"
 )
 
-echo Using %PADDLE_GPU_PACKAGE% from %PADDLE_GPU_INDEX%
+echo Using !PADDLE_GPU_WHEEL!
 
 echo Syncing base dependencies first. This prevents missing packages such as PIL/Pillow.
 uv sync
@@ -39,14 +40,14 @@ uv pip uninstall paddlepaddle
 if errorlevel 1 goto :error
 
 if defined USE_TUNA (
-  uv pip install %PADDLE_GPU_PACKAGE% -i https://pypi.tuna.tsinghua.edu.cn/simple --extra-index-url %PADDLE_GPU_INDEX%
+  uv pip install !PADDLE_GPU_WHEEL!
 ) else (
-  uv pip install %PADDLE_GPU_PACKAGE% -i %PADDLE_GPU_INDEX%
+  uv pip install !PADDLE_GPU_WHEEL!
 )
 if errorlevel 1 goto :error
 
 if defined PADDLE_GPU_RUNTIME_PACKAGE (
-  uv pip install %PADDLE_GPU_RUNTIME_PACKAGE% -i %PADDLE_GPU_INDEX%
+  uv pip install !PADDLE_GPU_RUNTIME_PACKAGE! -i !PADDLE_GPU_INDEX!
   if errorlevel 1 goto :error
 )
 

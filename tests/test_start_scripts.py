@@ -45,7 +45,7 @@ def test_bootstrap_scripts_default_to_china_sources_and_download_models():
     assert "https://www.paddlepaddle.org.cn/packages/stable/cpu/" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu130/" in windows_script
     assert "https://www.paddlepaddle.org.cn/packages/stable/cu126/" in windows_script
-    assert "paddlepaddle-gpu==3.3.0" in windows_script
+    assert "paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl" in windows_script
     assert "nvidia-cublas" in windows_script
     assert "nvidia-smi" in windows_script
     assert "mlx-vlm>=0.3.11" in mac_script
@@ -55,7 +55,7 @@ def test_windows_bootstrap_uses_delayed_expansion_for_gpu_package_variables():
     script = (ROOT / "scripts" / "bootstrap" / "bootstrap.bat").read_text(encoding="utf-8")
 
     assert "setlocal EnableDelayedExpansion" in script
-    assert "uv pip install !PADDLE_GPU_PACKAGE! -i !PADDLE_GPU_INDEX!" in script
+    assert "uv pip install !PADDLE_GPU_WHEEL!" in script
     assert "uv pip install !PADDLE_GPU_RUNTIME_PACKAGE! -i !PADDLE_GPU_INDEX!" in script
     assert "uv pip install %PADDLE_GPU_PACKAGE% -i %PADDLE_GPU_INDEX%" not in script
 
@@ -68,8 +68,8 @@ def test_acceleration_installers_sync_base_dependencies_before_no_sync_marker():
     assert "UV_HTTP_TIMEOUT=300" in windows_script
     assert ".ppocr_no_sync" in windows_script
     assert ".ppocr_use_tuna" in windows_script
-    assert "PADDLE_GPU_PACKAGE" in windows_script
-    assert "paddlepaddle-gpu==3.3.0" in windows_script
+    assert "PADDLE_GPU_WHEEL" in windows_script
+    assert "paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl" in windows_script
     assert "uv pip uninstall paddlepaddle" in windows_script
     assert "uv pip uninstall -y" not in windows_script
     assert "CUDA Version: 13" in windows_script
