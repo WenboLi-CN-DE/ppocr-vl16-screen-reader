@@ -55,9 +55,13 @@ def test_windows_bootstrap_uses_delayed_expansion_for_gpu_package_variables():
     script = (ROOT / "scripts" / "bootstrap" / "bootstrap.bat").read_text(encoding="utf-8")
 
     assert "setlocal EnableDelayedExpansion" in script
-    assert "uv pip install !PADDLE_GPU_WHEEL!" in script
+    assert "PADDLE_GPU_WHEEL_URL" in script
+    assert "PADDLE_GPU_WHEEL_FILE" in script
+    assert "Invoke-WebRequest" in script
+    assert "zipfile.ZipFile" in script
+    assert "uv pip install !PADDLE_GPU_WHEEL_FILE!" in script
     assert "uv pip install !PADDLE_GPU_RUNTIME_PACKAGE! -i !PADDLE_GPU_INDEX!" in script
-    assert "uv pip install %PADDLE_GPU_PACKAGE% -i %PADDLE_GPU_INDEX%" not in script
+    assert "uv pip install !PADDLE_GPU_WHEEL!" not in script
 
 
 def test_acceleration_installers_sync_base_dependencies_before_no_sync_marker():
@@ -68,7 +72,10 @@ def test_acceleration_installers_sync_base_dependencies_before_no_sync_marker():
     assert "UV_HTTP_TIMEOUT=300" in windows_script
     assert ".ppocr_no_sync" in windows_script
     assert ".ppocr_use_tuna" in windows_script
-    assert "PADDLE_GPU_WHEEL" in windows_script
+    assert "PADDLE_GPU_WHEEL_URL" in windows_script
+    assert "PADDLE_GPU_WHEEL_FILE" in windows_script
+    assert "Invoke-WebRequest" in windows_script
+    assert "zipfile.ZipFile" in windows_script
     assert "paddlepaddle_gpu-3.3.1-cp311-cp311-win_amd64.whl" in windows_script
     assert "uv pip uninstall paddlepaddle" in windows_script
     assert "uv pip uninstall -y" not in windows_script
